@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Models\rooms;
 use App\Models\hotels;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 use App\Utils\Response;
 
-class hotelsController extends Controller
+class roomsController extends Controller
 {
     /**
      * Display a listing of the resource.
@@ -18,7 +19,7 @@ class hotelsController extends Controller
      */
     public function index()
     {
-        return Response::success(hotels::orderBy('name')->get());
+        return Response::success(rooms::get());
     }
 
     /**
@@ -30,16 +31,15 @@ class hotelsController extends Controller
     public function store(Request $request)
     {
         if(self::validateData($request) === true){
-            $data = new hotels();
-            $data->name = $request->name;
-            $data->address = $request->address;
-            $data->city = $request->city;
-            $data->nit = $request->nit;
-            $data->room_count = $request->room_count;
+            $data = new rooms();
+            $data->hotel_id = $request->hotel_id;
+            $data->count = $request->count;
+            $data->room_type = $request->room_type;
+            $data->lodging = $request->lodging;
             if($data->save()){
                 return Response::success($data);
             }else{
-                return Response::getErrors($data);
+                return response()->json('error', 500);
             }
         }else{
             return self::validateData($request);
@@ -49,32 +49,29 @@ class hotelsController extends Controller
     /**
      * Display the specified resource.
      *
-     * @param  \App\Models\hotels  $hotels
+     * @param  \App\Models\rooms  $rooms
      * @return \Illuminate\Http\Response
      */
-    public function show(hotels $hotels)
+    public function show(rooms $rooms)
     {
-
-        
+        //
     }
 
     /**
      * Update the specified resource in storage.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\hotels  $hotels
+     * @param  \App\Models\rooms  $rooms
      * @return \Illuminate\Http\Response
      */
     public function update(Request $request, $id)
     {
-
         if(self::validateData($request) === true){
-            $data = hotels::find($id);
-            $data->name = $request->name;
-            $data->address = $request->address;
-            $data->city = $request->city;
-            $data->nit = $request->nit;
-            $data->room_count = $request->room_count;
+            $data =rooms::find($id);
+            $data->hotel_id = $request->hotel_id;
+            $data->count = $request->count;
+            $data->room_type = $request->room_type;
+            $data->lodging = $request->lodging;
             if($data->save()){
                 return Response::success($data);
             }else{
@@ -83,37 +80,43 @@ class hotelsController extends Controller
         }else{
             return self::validateData($request);
         }
-        
     }
 
     /**
      * Remove the specified resource from storage.
      *
-     * @param  \App\Models\hotels  $hotels
+     * @param  \App\Models\rooms  $rooms
      * @return \Illuminate\Http\Response
      */
     public function destroy($id)
     {
-        if(hotels::destroy($id)){
+        if(rooms::destroy($id)){
             return Response::deleteSuccess();
         }else{
             return response()->json('error', 500);
         }
     }
 
-
+    
     public function validateData($request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required | string | min:6 |unique:hotels',
-            'address' => 'required | string | min:4',
-            'city' => 'required | string | min:3',
-            'nit' => 'required | string | min:6',
-            'room_count' => 'required | numeric | min:1'
+            'hotel_id' => 'required | numeric |exists:hotels,id',
+            'count' => 'required | numeric | min:1',
+            'room_type' => 'required | string | min:3',
+            'lodging' => 'required | string | min:6',
         ]);
 
+        $count = rooms::where('hotel_id', $request->hotel_id)->sum('count');
+        $countHotel = hotels::find($request->hotel_id)->room_count;
+
         if($validator->fails() == 0){
-            return true;
+            if(intval($count)+ intval($request->count) <= intval($countHotel)){
+                return true;
+            }else{
+                return response()->json(Response::getErrorsValidate('Hotel no cuenta con la capacidad de ingresar ' . intval($request->count). ' habitaciones, solo cuenta con capacidad para '. intval($countHotel)-intval($count) .' habitaciones más'), 500);
+            }
+            
         }else{
             return response()->json(Response::getErrorsValidate($validator->errors()), 500);
         }

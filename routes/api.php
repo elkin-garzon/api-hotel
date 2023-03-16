@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Route;
 */
 //CONTROLLERS
 use App\Http\Controllers\API\hotelsController;
+use App\Http\Controllers\API\roomsController;
 
 //ROUTES
 Route::resource('/hotels', hotelsController::class);
+Route::resource('/rooms', roomsController::class);

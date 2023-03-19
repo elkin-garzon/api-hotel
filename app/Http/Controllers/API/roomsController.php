@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 use App\Utils\Response;
+use Exception;
 
 class roomsController extends Controller
 {
@@ -19,7 +20,7 @@ class roomsController extends Controller
      */
     public function index()
     {
-        return Response::success(rooms::get());
+        return Response::success(rooms::select('hotels.name', 'rooms.id', 'rooms.count', 'rooms.room_type', 'rooms.lodging', 'rooms.hotel_id')->join('hotels', 'hotels.id', '=', 'rooms.hotel_id')->get());
     }
 
     /**
@@ -100,25 +101,55 @@ class roomsController extends Controller
     
     public function validateData($request)
     {
-        $validator = Validator::make($request->all(), [
-            'hotel_id' => 'required | numeric |exists:hotels,id',
-            'count' => 'required | numeric | min:1',
-            'room_type' => 'required | string | min:3',
-            'lodging' => 'required | string | min:6',
-        ]);
 
-        $count = rooms::where('hotel_id', $request->hotel_id)->sum('count');
-        $countHotel = hotels::find($request->hotel_id)->room_count;
+        try {
+            $validator = Validator::make($request->all(), [
+                'hotel_id' => 'required | numeric |exists:hotels,id',
+                'count' => 'required | numeric | min:1',
+                'room_type' => 'required | string | min:3',
+                'lodging' => 'required | string | min:3',
+            ]);
+    
+            if($validator->fails() == 0){
 
-        if($validator->fails() == 0){
-            if(intval($count)+ intval($request->count) <= intval($countHotel)){
-                return true;
+                $room_type = rooms::where([
+                    ['room_type', '=',$request->room_type],
+                    ['hotel_id', '=',$request->hotel_id]
+                ])->get();
+        
+                $lodging = rooms::where([
+                    ['lodging', '=',$request->lodging],
+                    ['hotel_id', '=',$request->hotel_id]
+                ])->get();
+
+                if($request->method() === 'POST'){
+                    if(count($room_type) > 0){
+                        throw new Exception('Tipo de habitacion ya se encuentra creado para el hotel');
+                    }
+        
+                    if(count($lodging) > 0){
+                        throw new Exception('Acomodación ya se encuentra creado para el hotel');
+                    }
+                    $count = rooms::where('hotel_id', $request->hotel_id)->sum('count');
+                    $countHotel = hotels::find($request->hotel_id)->room_count;
+                }else{
+                    $room =rooms::find($request->id);
+                    $count = rooms::where('hotel_id', $request->hotel_id)->sum('count')-$room->count;;
+                    $countHotel = hotels::find($request->hotel_id)->room_count;
+                }
+                
+                if(intval($count)+ intval($request->count) <= intval($countHotel)){
+                    return true;
+                }else{
+                    return response()->json(Response::getErrorsValidate('Hotel no cuenta con la capacidad de ingresar ' . intval($request->count). ' habitaciones, solo cuenta con capacidad para '. intval($countHotel)-intval($count) .' habitaciones más'), 500);
+                }
+                
             }else{
-                return response()->json(Response::getErrorsValidate('Hotel no cuenta con la capacidad de ingresar ' . intval($request->count). ' habitaciones, solo cuenta con capacidad para '. intval($countHotel)-intval($count) .' habitaciones más'), 500);
+                return response()->json(Response::getErrorsValidate($validator->errors()), 500);
             }
-            
-        }else{
-            return response()->json(Response::getErrorsValidate($validator->errors()), 500);
-        }
+
+        } catch (\Throwable $th) {
+            return response()->json(Response::getErrorsValidate($th->getMessage()), 500);
+        }       
     }
 }
